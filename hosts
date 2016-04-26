@@ -1,0 +1,2 @@
+[janus]
+janus.lan ansible_ssh_user=root

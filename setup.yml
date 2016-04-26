@@ -1,0 +1,95 @@
+---
+- hosts: janus
+  sudo: yes
+  serial: 1
+  max_fail_percentage: 0
+
+  tasks:
+  - name: OS Updates
+    apt: upgrade=dist update_cache=yes
+
+  - name: Install Common packages
+    apt: package={{ item }} state=latest force=yes
+    with_items:
+      - git
+      - screen
+      - rsync
+      - htop
+      - libmicrohttpd-dev
+      - libjansson-dev
+      - libnice-dev
+      - libssl-dev
+      - libsrtp-dev
+      - libsofia-sip-ua-dev
+      - libglib2.0-dev
+      - libopus-dev
+      - libogg-dev
+      - libini-config-dev
+      - libcollection-dev
+      - pkg-config
+      - gengetopt
+      - libtool
+      - automake
+      - build-essential
+      - subversion
+      - cmake
+      - wget
+
+  - file: path=/opt/janus/ state=directory mode=0755
+  - file: path=/opt/janus/dl/ state=directory mode=0755
+  - file: path=/opt/janus/share/ state=directory mode=0755
+  - copy: content="CPPFLAGS=-I/opt/janus/include\nLDFLAGS=-L/opt/janus/lib\n" dest=/opt/janus/share/config.site
+
+  - stat: path=/opt/janus/lib/libusrsctp.so
+    register: libusrsctp_so
+  - subversion: repo=http://sctp-refimpl.googlecode.com/svn/trunk/KERN/usrsctp dest=/opt/janus/dl/usrsctp/
+    when: not libusrsctp_so.stat.exists
+  - shell: /opt/janus/dl/usrsctp/bootstrap chdir=/opt/janus/dl/usrsctp/
+    when: not libusrsctp_so.stat.exists
+  - shell: /opt/janus/dl/usrsctp/configure --prefix=/opt/janus/ chdir=/opt/janus/dl/usrsctp/
+    when: not libusrsctp_so.stat.exists
+  - shell: make chdir=/opt/janus/dl/usrsctp/
+    when: not libusrsctp_so.stat.exists
+  - shell: make install chdir=/opt/janus/dl/usrsctp/
+    when: not libusrsctp_so.stat.exists
+
+  - stat: path=/opt/janus/lib/libwebsockets.so
+    register: libwebsockets_so
+  - git: repo=git://git.libwebsockets.org/libwebsockets dest=/opt/janus/dl/libwebsockets accept_hostkey=yes
+    when: not libwebsockets_so.stat.exists
+  - file: path=/opt/janus/dl/libwebsockets/build state=directory mode=0755
+    when: not libwebsockets_so.stat.exists
+  - shell: cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/janus/ .. chdir=/opt/janus/dl/libwebsockets/build
+    when: not libwebsockets_so.stat.exists
+  - shell: make chdir=/opt/janus/dl/libwebsockets/build
+    when: not libwebsockets_so.stat.exists
+  - shell: make install chdir=/opt/janus/dl/libwebsockets/build
+    when: not libwebsockets_so.stat.exists
+
+  - file: path=/opt/janus/certs/ state=directory mode=0755
+
+  - stat: path=/opt/janus/certs/janus.key
+    register: janus_key
+  - shell: openssl req  -new -newkey rsa:4096 -days 3650 -nodes  -x509 -subj "/C=IT/L=Talamona/CN=janus.lan" -keyout /opt/janus/certs/janus.key -out /opt/janus/certs/janus.pem
+    when: not janus_key.stat.exists
+
+  - stat: path=/opt/janus/bin/janus
+    register: janus_bin
+
+  - name: download janus
+    get_url: url=https://github.com/meetecho/janus-gateway/archive/v0.0.9.tar.gz dest=/opt/janus/dl/janus.tar.gz mode=0440
+    when: not janus_bin.stat.exists
+
+  - unarchive: src=/opt/janus/dl/janus.tar.gz dest=/opt/janus/dl/ copy=no
+    when: not janus_bin.stat.exists
+
+  - shell: ./autogen.sh chdir=/opt/janus/dl/janus-gateway-0.0.9/
+    when: not janus_bin.stat.exists
+  - shell: ./configure --prefix=/opt/janus/ --disable-websockets --disable-rabbitmq --disable-docs chdir=/opt/janus/dl/janus-gateway-0.0.9/
+    when: not janus_bin.stat.exists
+  - shell: make chdir=/opt/janus/dl/janus-gateway-0.0.9/
+    when: not janus_bin.stat.exists
+  - shell: make install chdir=/opt/janus/dl/janus-gateway-0.0.9/
+    when: not janus_bin.stat.exists
+
+  - template: src=janus.cfg.j2 dest=/opt/janus/etc/janus/janus.cfg owner=root group=root mode=0755
