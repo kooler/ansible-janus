@@ -42,7 +42,7 @@
 
   - stat: path=/opt/janus/lib/libusrsctp.so
     register: libusrsctp_so
-  - subversion: repo=http://sctp-refimpl.googlecode.com/svn/trunk/KERN/usrsctp dest=/opt/janus/dl/usrsctp/
+  - git: repo=git://github.com/sctplab/usrsctp dest=/opt/janus/dl/usrsctp/
     when: not libusrsctp_so.stat.exists
   - shell: /opt/janus/dl/usrsctp/bootstrap chdir=/opt/janus/dl/usrsctp/
     when: not libusrsctp_so.stat.exists
